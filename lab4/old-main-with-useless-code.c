@@ -21,12 +21,23 @@
 
 
 
+enum { success, src_open_fail, dst_open_fail };
 
+void copy_dir(const char *src, const char *dst);
+int copy_file(const char *src, const char *dst);
+void print_dir_file(const char *path, int depth);
 
+void *ThreadFunc(void*p)
+{
+    static int count = 1;
+    printf ("Create thread %d\n", count);
+    count++;
+
+}
 volatile int task_count = 0;
 volatile int completed_count = 0;
 
-int create_thread(void *(*ThreadFunc)(void*),void* arg)
+int thread_test(void *(*ThreadFunc)(void*),void* arg)
 {
     int     err;
     pthread_t tid;
@@ -38,15 +49,21 @@ int create_thread(void *(*ThreadFunc)(void*),void* arg)
     ++ task_count;
 
 }
+struct pair *new_pair(const char*src, const char *dst);
 
-void muti_copy_dir(const char *src, const char *dst)
+void *muti_copy_dir(void *pvoid);
 
 
 
 
 
 int main(int argc, char **argv){
-    muti_copy_dir(argv[1], argv[2]);
+
+
+    //print_dir_file("../../", 0);
+    //thread_test(ThreadFunc,NULL);
+    //copy_dir(argv[1], argv[2]);
+    muti_copy_dir(new_pair(argv[1],argv[2]));
     usleep(1000);
     while(task_count > completed_count)
     {
@@ -125,8 +142,11 @@ void *muti_copy_file(void *pvoid){
 }
 
 
-void muti_copy_dir(const char *src, const char *dst)
+void *muti_copy_dir(void *pvoid)
 {
+    struct pair *ppair = (struct pair*)pvoid;
+    const char *src = ppair->src;
+    const char *dst = ppair->dst;
     DIR * dir;
     struct dirent * ptr;
     //int i;
@@ -148,10 +168,12 @@ void muti_copy_dir(const char *src, const char *dst)
         path_cat(buf2, dst,ptr->d_name);
 
         if (ptr->d_type == DT_DIR){
-            muti_copy_dir(buf, buf2);
+            //thread_test(muti_copy_dir, new_pair(buf,buf2));
+            muti_copy_dir(new_pair(buf,buf2));
+            //copy_dir(buf, buf2);
         }
         else if (ptr->d_type == DT_REG){
-            create_thread(muti_copy_file, new_pair(buf,buf2));
+            thread_test(muti_copy_file, new_pair(buf,buf2));
             //muti_copy_file(new_pair(buf,buf2));
             //if(copy_file(buf,buf2)!=success){
              //   printf("copy fail from %s to %s!\n", buf, buf2);
@@ -165,6 +187,7 @@ void muti_copy_dir(const char *src, const char *dst)
     //printf("copy dir completed: %s to %s\n", src, dst);
     free(buf);
     free(buf2);
+    free_pair(ppair);
 }
 
 
@@ -179,8 +202,6 @@ void path_cat(char *buf, const char *base, const char *child){
     buf[len++]='\0';
     strcat(buf, child);
 }
-
-enum { success, src_open_fail, dst_open_fail };
 
 void copy_dir(const char *src, const char *dst)
 {
@@ -272,3 +293,65 @@ int copy_file(const char *src, const char *dst){
 
 
 
+
+
+
+
+
+void print_dir_full_path(const char *path)
+{
+    DIR * dir;
+    struct dirent * ptr;
+    //int i;
+    dir = opendir(path);
+    char buf[100];
+    while((ptr = readdir(dir)) != NULL)
+    {
+        if (!strcmp("..", ptr->d_name) || !strcmp(".", ptr->d_name))
+            continue;
+
+        path_cat(buf, path,ptr->d_name);
+        printf("d_name : %s\n", buf);
+
+        if (ptr->d_type == 4){
+            path_cat(buf, path,ptr->d_name);
+            print_dir_full_path(buf);
+        }
+
+    }
+    closedir(dir);
+}
+
+
+
+
+void print_dir_file(const char *path, int depth)
+{
+    DIR * dir;
+    struct dirent * ptr;
+    //int i;
+    dir = opendir(path);
+    char buf[100];
+    while((ptr = readdir(dir)) != NULL)
+    {
+        if (!strcmp("..", ptr->d_name) || !strcmp(".", ptr->d_name))
+            continue;
+
+        for (int i = 0; i < depth; ++i)
+            printf("  ");
+        printf("d_name : %s\n", ptr->d_name);
+
+        if (ptr->d_type == 4){
+            //printf("ptr->d_off: %ld", ptr->d_off);
+            int len = strlen(path);
+            memcpy(buf,path,len);
+            buf[len++]='/';
+            buf[len++]='\0';
+            strcat(buf, ptr->d_name);
+            //printf("\n\n\n the child path is \n: %s\n", buf);
+            print_dir_file(buf ,depth+1);
+        }
+
+    }
+    closedir(dir);
+}
