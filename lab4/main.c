@@ -20,43 +20,43 @@
 #define BUF_SIZE 512
 
 
+enum { success, src_open_fail, dst_open_fail };
 
+
+int copy_file(const char *src, const char *dst);
 
 
 volatile int task_count = 0;
 volatile int completed_count = 0;
 
-int create_thread(void *(*ThreadFunc)(void*),void* arg)
-{
-    int     err;
-    pthread_t tid;
-    int  count = 0;
-    err= pthread_create(&tid, NULL, ThreadFunc, arg);
-    if(err != 0){
-       return 1;
-    }
-    ++ task_count;
 
-}
 
-void muti_copy_dir(const char *src, const char *dst)
+void muti_copy_dir(const char *src, const char *dst);
 
+
+int detail = 0;
 
 
 
 
 int main(int argc, char **argv){
+    for (int i = 3; i < argc; ++i) {
+        if (strcmp("--detail", argv[i]) == 0) {
+            detail = 1;
+        }
+    }
     muti_copy_dir(argv[1], argv[2]);
     usleep(1000);
     while(task_count > completed_count)
     {
         usleep(1000);
     }
-    printf("completed %d/%d tasks\n", completed_count, task_count);
+    printf("completed %d/%d files\n", completed_count, task_count);
     return 0;
 
 }
 
+int create_thread(void *(*ThreadFunc)(void*),void* arg);
 
 
 
@@ -95,33 +95,13 @@ void *muti_copy_file(void *pvoid){
     struct pair *ppair = (struct pair*)pvoid;
     const char *src = ppair->src;
     const char *dst = ppair->dst;
-	int infd, outfd;
-	char buffer[BUF_SIZE];
-	int i;
-
-	if ((infd=open(src,O_RDONLY))<0){
-        printf("source file open fail, file name: %s\n", src);
-        return NULL;
-	}
-
-	if ((outfd=open(dst,O_WRONLY|O_CREAT|O_EXCL,S_IRUSR|S_IWUSR))<0){
-        close(infd);
-        printf("destinatin file open fail, file name: %s\n", dst);
-        return NULL;
-	}
-
-	while(1){
-		i=read(infd,buffer,BUF_SIZE);
-		printf("copying from %s to %s\n", src, dst);
-		if (i<=0) break;
-		write(outfd,buffer,i);
-	}
-	++ completed_count;
-    printf("copy file completed: %s to %s\n", src, dst);
-	close(outfd);
-	close(infd);
-    free_pair(ppair);
-    return NULL;
+    if (detail)
+        printf("start copy file from %s to %s\n", src, dst);
+    copy_file(src,dst);
+    if (detail)
+        printf("copy file completed from %s to %s\n", src, dst);
+    ++ completed_count;
+	free_pair(ppair);
 }
 
 
@@ -151,13 +131,15 @@ void muti_copy_dir(const char *src, const char *dst)
             muti_copy_dir(buf, buf2);
         }
         else if (ptr->d_type == DT_REG){
-            create_thread(muti_copy_file, new_pair(buf,buf2));
+
+            if (!create_thread(muti_copy_file, new_pair(buf,buf2)))
+                ++ task_count;
             //muti_copy_file(new_pair(buf,buf2));
             //if(copy_file(buf,buf2)!=success){
              //   printf("copy fail from %s to %s!\n", buf, buf2);
             //}
         } else {
-            printf("not a file or dir: %s", buf);
+            printf("not a file or dir: %s\n", buf);
         }
 
     }
@@ -180,7 +162,7 @@ void path_cat(char *buf, const char *base, const char *child){
     strcat(buf, child);
 }
 
-enum { success, src_open_fail, dst_open_fail };
+
 
 void copy_dir(const char *src, const char *dst)
 {
@@ -208,10 +190,10 @@ void copy_dir(const char *src, const char *dst)
         }
         else if (ptr->d_type == DT_REG){
             if(copy_file(buf,buf2)!=success){
-                printf("copy fail from %s to %s!\n", buf, buf2);
+                printf("copy fail from %s to %s!\n",buf, buf2);
             }
         } else {
-            printf("not a file or dir: %s", buf);
+            printf("not a file or dir: %s\n", buf);
         }
 
     }
@@ -228,11 +210,13 @@ int copy_file(const char *src, const char *dst){
 	int i;
 
 	if ((infd=open(src,O_RDONLY))<0){
+        printf("source file open fail, file name: %s\n", src);
         return src_open_fail;
 	}
 
 	if ((outfd=open(dst,O_WRONLY|O_CREAT|O_EXCL,S_IRUSR|S_IWUSR))<0){
         close(infd);
+        printf("destination file open fail, file name: %s\n", dst);
         return dst_open_fail;
 	}
 
@@ -240,6 +224,8 @@ int copy_file(const char *src, const char *dst){
 		i=read(infd,buffer,BUF_SIZE);
 		if (i<=0) break;
 		write(outfd,buffer,i);
+		if (detail)
+            printf("copy file %d bytes from %s to %s\n",i , src, dst);
 	}
 
 	close(outfd);
@@ -248,27 +234,18 @@ int copy_file(const char *src, const char *dst){
     return success;
 }
 
+int create_thread(void *(*ThreadFunc)(void*),void* arg)
+{
+    int     err;
+    pthread_t tid;
+    int  count = 0;
+    err= pthread_create(&tid, NULL, ThreadFunc, arg);
+    if(err != 0){
+        printf("creat threat fail\n");
+        return 1;
+    }
+    return 0;
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+}
 
