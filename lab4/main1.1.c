@@ -26,9 +26,12 @@ enum { success, src_open_fail, dst_open_fail };
 int copy_file(const char *src, const char *dst);
 
 
-volatile int task_count = 0;
-volatile int completed_count = 0;
+pthread_mutex_t c_mutex;
 
+
+int task_count = 0;
+volatile int completed_count = 0;
+volatile int failed_count = 0;
 
 
 void muti_copy_dir(const char *src, const char *dst);
@@ -36,7 +39,27 @@ void muti_copy_dir(const char *src, const char *dst);
 
 int detail = 0;
 
+void add_completed(){
+    while (pthread_mutex_trylock(&c_mutex)){
+        // return not zero, lock failed
+        // only do a simple thing, use spinlock
+        printf("trylock fail\n"); // for debug
+    }
+    printf("trylock success\n"); // for debug
+    ++ completed_count;
+    pthread_mutex_unlock(&c_mutex);
+}
 
+void add_failed(){
+    while (pthread_mutex_trylock(&c_mutex)){
+        // return not zero, lock failed
+        // only do a simple thing, use spinlock
+        printf("trylock fail\n"); // for debug
+    }
+    printf("trylock success\n"); // for debug
+    ++ completed_count;
+    pthread_mutex_unlock(&c_mutex);
+}
 
 
 int main(int argc, char **argv){
@@ -45,12 +68,14 @@ int main(int argc, char **argv){
             detail = 1;
         }
     }
+    pthread_mutex_init(&c_mutex, NULL);
     muti_copy_dir(argv[1], argv[2]);
     usleep(1000);
-    while(task_count > completed_count)
+    while(task_count > completed_count + failed_count)
     {
         usleep(1000);
     }
+    pthread_mutex_destroy(&c_mutex);
     printf("completed %d/%d files\n", completed_count, task_count);
     return 0;
 
@@ -95,14 +120,23 @@ void *muti_copy_file(void *pvoid){
     struct pair *ppair = (struct pair*)pvoid;
     const char *src = ppair->src;
     const char *dst = ppair->dst;
-    if (detail)
-        printf("start copy file from %s to %s\n", src, dst);
-    copy_file(src,dst);
-    if (detail)
+
+    printf("start copy file from %s to %s\n", src, dst);
+    if (copy_file(src,dst) == success) {
         printf("copy file completed from %s to %s\n", src, dst);
-    ++ completed_count;
+        add_completed();
+    }
+    else {
+        printf("copy file failed from %s to %s\n", src, dst);
+        add_failed();
+    }
+
+
+
 	free_pair(ppair);
 }
+
+
 
 
 void muti_copy_dir(const char *src, const char *dst)
@@ -156,7 +190,8 @@ void muti_copy_dir(const char *src, const char *dst)
 
 void path_cat(char *buf, const char *base, const char *child){
     int len = strlen(base);
-    memcpy(buf,base,len);
+    memmove(buf, base, len);
+
     buf[len++]='/';
     buf[len++]='\0';
     strcat(buf, child);
