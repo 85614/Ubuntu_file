@@ -17,7 +17,7 @@
 #include <unistd.h>
 
 
-#define BUF_SIZE 512
+#define BUF_SIZE 1024
 
 
 enum { success, src_open_fail, dst_open_fail };
@@ -26,62 +26,26 @@ enum { success, src_open_fail, dst_open_fail };
 int copy_file(const char *src, const char *dst);
 
 
-pthread_mutex_t c_mutex;
-
-
-int task_count = 0;
-volatile int completed_count = 0;
-volatile int failed_count = 0;
-
-
 void muti_copy_dir(const char *src, const char *dst);
 
 
 int detail = 0;
 
-void add_completed(){
-    while (pthread_mutex_trylock(&c_mutex)){
-        // return not zero, lock failed
-        // only do a simple thing, use spinlock
-        printf("trylock fail\n"); // for debug
-    }
-    printf("trylock success\n"); // for debug
-    ++ completed_count;
-    pthread_mutex_unlock(&c_mutex);
-}
-
-void add_failed(){
-    while (pthread_mutex_trylock(&c_mutex)){
-        // return not zero, lock failed
-        // only do a simple thing, use spinlock
-        printf("trylock fail\n"); // for debug
-    }
-    printf("trylock success\n"); // for debug
-    ++ completed_count;
-    pthread_mutex_unlock(&c_mutex);
-}
 
 
 int main(int argc, char **argv){
+
     for (int i = 3; i < argc; ++i) {
         if (strcmp("--detail", argv[i]) == 0) {
             detail = 1;
         }
     }
-    pthread_mutex_init(&c_mutex, NULL);
     muti_copy_dir(argv[1], argv[2]);
-    usleep(1000);
-    while(task_count > completed_count + failed_count)
-    {
-        usleep(1000);
-    }
-    pthread_mutex_destroy(&c_mutex);
-    printf("completed %d/%d files\n", completed_count, task_count);
     return 0;
 
 }
 
-int create_thread(void *(*ThreadFunc)(void*),void* arg);
+
 
 
 
@@ -121,25 +85,102 @@ void *muti_copy_file(void *pvoid){
     const char *src = ppair->src;
     const char *dst = ppair->dst;
 
-    printf("start copy file from %s to %s\n", src, dst);
-    if (copy_file(src,dst) == success) {
-        printf("copy file completed from %s to %s\n", src, dst);
-        add_completed();
+    int * ans = malloc(sizeof(int));
+    printf("%s ===> %s start\n", src, dst);
+    //printf("start copy file from %s to %s\n", src, dst);
+    if ((*ans = copy_file(src,dst)) == success) {
+        //printf("copy file completed from %s to %s\n", src, dst);
+        printf("%s ===> %s completed\n", src, dst);
     }
     else {
-        printf("copy file failed from %s to %s\n", src, dst);
-        add_failed();
+        //printf("copy file failed from %s to %s\n", src, dst);
+        printf("%s ===> %s failed\n", src, dst);
     }
 
-
-
 	free_pair(ppair);
+	return ans;
+}
+
+struct thread_list {
+    pthread_t ** list;
+    size_t size;
+    size_t capacity;
+};
+
+
+void add_threadid(struct thread_list *list, pthread_t *th) {
+
+    if (!list->list || list->size >= list->capacity) {
+        list->capacity = list->size * 3 /2 + 1;
+        pthread_t **new_list = (pthread_t **)malloc(list->capacity * sizeof(pthread_t*));
+        memmove(new_list, list->list, list->size * sizeof(pthread_t*));
+        list->list = new_list;
+    }
+
+    list->list [list->size++] = th;
+
+}
+void free_threadid(struct thread_list *list)
+{
+
+    for(int i = 0 ;i < list->size;++i)
+        free(list->list[i]);
+}
+
+int create_thread(void *(*ThreadFunc)(void*),void* arg, struct thread_list *list)
+{
+    int err;
+    pthread_t *tid = (pthread_t *)malloc(sizeof(pthread_t));
+    int  count = 0;
+    err= pthread_create(tid, NULL, ThreadFunc, arg);
+    if(err != 0){
+        printf("creat threat fail\n");
+        return 1;
+    }
+    // printf("add id ptr :%d\n", (int)tid);
+    add_threadid(list, tid);
+    return 0;
 }
 
 
 
 
+void __muti_copy_dir(const char *src, const char *dst, struct thread_list *list);
+
 void muti_copy_dir(const char *src, const char *dst)
+{
+
+    struct thread_list list;
+    list.list = (pthread_t**)malloc(1);
+    list.size = 0;
+    list.capacity = 0;
+
+    __muti_copy_dir(src, dst, &list);
+
+
+
+    int *thread_ret = NULL;
+    int success_count = 0;
+    int failed_count = 0;
+    for(int i = 0 ;i < list.size; ++i){
+        pthread_join(*(list.list[i]), (void**)&thread_ret);
+        if(thread_ret){
+            if (*thread_ret == success)
+                ++ success_count;
+            else
+                ++ failed_count;
+            free(thread_ret);
+            thread_ret = NULL;
+        }
+    }
+    printf("Copy %ld files in total, %d success, %d failed\n", list.size, success_count, failed_count);
+    free_threadid(&list);
+
+}
+
+
+
+void __muti_copy_dir(const char *src, const char *dst, struct thread_list *list)
 {
     DIR * dir;
     struct dirent * ptr;
@@ -162,12 +203,14 @@ void muti_copy_dir(const char *src, const char *dst)
         path_cat(buf2, dst,ptr->d_name);
 
         if (ptr->d_type == DT_DIR){
-            muti_copy_dir(buf, buf2);
+            printf("in %s %d\n", __FUNCTION__, __LINE__);
+            __muti_copy_dir(buf, buf2, list);
         }
         else if (ptr->d_type == DT_REG){
 
-            if (!create_thread(muti_copy_file, new_pair(buf,buf2)))
-                ++ task_count;
+            if (!create_thread(muti_copy_file, new_pair(buf,buf2), list))
+            {
+            }
             //muti_copy_file(new_pair(buf,buf2));
             //if(copy_file(buf,buf2)!=success){
              //   printf("copy fail from %s to %s!\n", buf, buf2);
@@ -269,18 +312,6 @@ int copy_file(const char *src, const char *dst){
     return success;
 }
 
-int create_thread(void *(*ThreadFunc)(void*),void* arg)
-{
-    int     err;
-    pthread_t tid;
-    int  count = 0;
-    err= pthread_create(&tid, NULL, ThreadFunc, arg);
-    if(err != 0){
-        printf("creat threat fail\n");
-        return 1;
-    }
-    return 0;
 
 
-}
 
