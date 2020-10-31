@@ -1,13 +1,13 @@
 #! /bin/bash
-echo "gcc main2.0.c  -o main -lpthread"
-gcc main2.0.c  -o main -lpthread
+echo "gcc muti-copy-dir2.1.c  -o muti-copy-dir -lpthread"
+gcc muti-copy-dir2.1.c  -o muti-copy-dir -lpthread
 echo "rm -rf ../lab4-copy"
 rm -rf ../lab4-copy
 echo
-echo "./main . ../lab4-copy"
-./main . ../lab4-copy
-#echo "./main . ../lab4-copy --detail"
-#./main . ../lab4-copy --detail
+echo "./muti-copy-dir . ../lab4-copy"
+./muti-copy-dir . ../lab4-copy
+#echo "./muti-copy-dir . ../lab4-copy --detail"
+#./muti-copy-dir . ../lab4-copy --detail
 echo
 echo "find ./ -type f -print0 | xargs -0 md5sum"
 find ./ -type f -print0 | xargs -0 md5sum

@@ -20,17 +20,31 @@
 #define BUF_SIZE 1024
 
 
+// copy_file result enum
 enum { success, src_open_fail, dst_open_fail, unknown };
+
+
+struct copy_tdata {
+    char *src; // date in heap, need free
+    char *dst; // date in heap, need free
+    pthread_t tid;
+    int thread_err;
+    int result;
+};
+
+// background copy file
+void background_copy_file(struct copy_tdata *pdata);
 
 
 int copy_file(const char *src, const char *dst);
 
 
+// copy directory multi-threads
 void muti_copy_dir(const char *src, const char *dst);
 
 
+// if show copy datil
 int detail = 0;
-
 
 
 int main(int argc, char **argv){
@@ -53,14 +67,6 @@ void path_cat(char *buf, const char *base, const char *child);
 
 
 
-struct copy_tdata {
-    char *src;
-    char *dst;
-    pthread_t tid;
-    int thread_created;
-    int ans;
-};
-
 char *new_str(const char*s){
     int len = strlen(s)+1;
     char*buf = (char*)malloc(len);
@@ -72,8 +78,8 @@ struct copy_tdata *new_copy_tdata(const char*src, const char *dst){
     struct copy_tdata* ans = (struct copy_tdata*)malloc(sizeof(struct copy_tdata));
     ans->src = new_str(src);
     ans->dst = new_str(dst);
-    ans->thread_created = 0;
-    ans->ans = unknown;
+    ans->thread_err = 0;
+    ans->result = unknown;
     return ans;
 }
 
@@ -85,15 +91,15 @@ void free_copy_tdata(struct copy_tdata* ppair){
 
 
 void *__copy_file(void *pvoid){
-    
+
     struct copy_tdata *ppair = (struct copy_tdata*)pvoid;
     const char *src = ppair->src;
     const char *dst = ppair->dst;
 
-    
+
     printf("%s ===> %s start\n", src, dst);
     //printf("start copy file from %s to %s\n", src, dst);
-    if ((ppair->ans = copy_file(src,dst)) == success) {
+    if ((ppair->result = copy_file(src,dst)) == success) {
         //printf("copy file completed from %s to %s\n", src, dst);
         printf("%s ===> %s completed\n", src, dst);
     }
@@ -103,26 +109,24 @@ void *__copy_file(void *pvoid){
     }
 
 	return NULL;
-	
+
 }
 
 
 
-background_copy_file(const char *src, const char *dst, struct copy_tdata *pdata){
-    // 创建线程后台复制文件，返回thread id的指针(指向堆中内存)
-    // 
+void background_copy_file(struct copy_tdata *pdata){
+    // create a thread to copy file, data store into *pdata
     int err;
-    pdata->tid = (pthread_t *)malloc(sizeof(pthread_t));
+
     int  count = 0;
-    err= pthread_create(tid, NULL, __copy_file, new_copy_tdata(src, dst));
-    if(err != 0){
+    pdata->thread_err= pthread_create(&pdata->tid, NULL, __copy_file, pdata);
+    if(pdata->thread_err != 0){
         printf("creat threat  fail\n");
-        
+
     }
-    pdata->thread_created = 1;
 }
 
-
+// a list store thread data, to be manage
 struct thread_list {
     struct copy_tdata ** list;
     size_t size;
@@ -134,7 +138,7 @@ void add_thread_data(struct thread_list *list, struct copy_tdata *th) {
 
     if (!list->list || list->size >= list->capacity) {
         list->capacity = list->size * 3 /2 + 1;
-        pthread_t **new_list = (pthread_t **)malloc(list->capacity * sizeof(pthread_t*));
+        struct copy_tdata **new_list = (struct copy_tdata **)malloc(list->capacity * sizeof(pthread_t*));
         memmove(new_list, list->list, list->size * sizeof(pthread_t*));
         list->list = new_list;
     }
@@ -142,7 +146,7 @@ void add_thread_data(struct thread_list *list, struct copy_tdata *th) {
     list->list [list->size++] = th;
 
 }
-void free_threadid(struct thread_list *list)
+void free_thread_data(struct thread_list *list)
 {
 
     for(int i = 0 ;i < list->size;++i)
@@ -158,31 +162,27 @@ void muti_copy_dir(const char *src, const char *dst)
 {
 
     struct thread_list list;
-    list.list = (pthread_t**)malloc(1);
+    list.list = NULL;
     list.size = 0;
     list.capacity = 0;
 
     __muti_copy_dir(src, dst, &list);
 
-
-
-    int *thread_ret = NULL;
     int success_count = 0;
     int failed_count = 0;
     for(int i = 0 ;i < list.size; ++i){
-        
-        pthread_join(list.list[i]->tid, NULL);
-        if(thread_ret){
-            if (*thread_ret == success)
-                ++ success_count;
-            else
-                ++ failed_count;
-            free(thread_ret);
-            thread_ret = NULL;
-        }
+
+        struct copy_tdata *data = list.list[i];
+        pthread_join(data->tid, NULL);
+        if (!data->thread_err && data->result == success)
+            ++ success_count;
+        else
+            ++ failed_count;
+        //free_copy_tdata(data); do it in free list
     }
-    printf("Copy %ld files in total, %d success, %d failed\n", list.size, success_count, failed_count);
-    free_threadid(&list);
+    printf("\nCopy %ld files in total, %d success, %d failed\n", list.size, success_count, failed_count);
+
+    free_thread_data(&list);
 
 }
 
@@ -216,17 +216,15 @@ void __muti_copy_dir(const char *src, const char *dst, struct thread_list *list)
         }
         else if (ptr->d_type == DT_REG){
             struct copy_tdata *data =  new_copy_tdata(buf,buf2);
-            pthread_t *ptid = background_copy_file(data->src, data->dst, data);
-            if (ptid) {
-                // 存储ptid, 到list以供管理
-                add_thread_data(list, ptid);
-            }
+            background_copy_file(data);
+            // 存储ptid, 到list以供管理
+            add_thread_data(list, data);
         } else {
             printf("not a file or dir: %s\n", buf);
         }
 
     }
-    closedir(dir);    
+    closedir(dir);
     free(buf);
     free(buf2);
 }
@@ -288,7 +286,7 @@ void copy_dir(const char *src, const char *dst)
 int copy_file(const char *src, const char *dst){
 
 	int infd, outfd;
-    char buffer = (char*)malloc(BUF_SIZE);
+    char *buffer = (char*)malloc(BUF_SIZE);
 	int i;
 
 	if ((infd=open(src,O_RDONLY))<0){
@@ -315,7 +313,3 @@ int copy_file(const char *src, const char *dst){
     free(buffer);
     return success;
 }
-
-
-
-
