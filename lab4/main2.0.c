@@ -190,6 +190,7 @@ void __muti_copy_dir(const char *src, const char *dst, struct thread_list *list)
         DIR *dst_dir = opendir(dst);
         if(!dst_dir && mkdir(dst, 0777)){
             printf("create dir fail!\n");
+            return;
         }
     }
     char *buf = (char*)malloc(100);
@@ -292,7 +293,8 @@ int copy_file(const char *src, const char *dst){
         return src_open_fail;
 	}
 
-	if ((outfd=open(dst,O_WRONLY|O_CREAT|O_EXCL,S_IRUSR|S_IWUSR))<0){
+	//if ((outfd=open(dst,O_WRONLY|O_CREAT|O_EXCL,S_IRUSR|S_IWUSR))<0){
+	if ((outfd=open(dst,O_WRONLY|O_CREAT,S_IRUSR|S_IWUSR))<0){
         close(infd);
         printf("destination file open fail, file name: %s\n", dst);
         return dst_open_fail;
