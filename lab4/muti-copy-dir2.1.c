@@ -23,13 +23,16 @@
 // copy_file result enum
 enum { success, src_open_fail, dst_open_fail, unknown };
 
-
+// 用于记录复制文件线程相关数据的结构体
 struct copy_tdata {
-    char *src; // date in heap, need free
-    char *dst; // date in heap, need free
-    pthread_t tid;
-    int thread_err;
-    int result;
+    char *src; // 源路径
+    char *dst; // 目的路径
+    // 由于需要在另一个线程内进行复制，
+    // src和dst指向的内存不能在栈中，也不能被共享，
+    // 所以需要生成在堆中的副本
+    pthread_t tid; //记录 线程id
+    int thread_err; // 记录创建线程的返回值
+    int result; //记录复制文件的返回值
 };
 
 // background copy file，
@@ -74,13 +77,14 @@ char *new_str(const char*s){
     return buf;
 }
 
-// 用源路径字符串和目的路径字符串生成 用于记录拷贝文件相关数据的结构体
+// 用源路径字符串和目的路径字符串，生成用于记录拷贝文件相关数据的结构体
 struct copy_tdata *new_copy_tdata(const char*src, const char *dst){
     struct copy_tdata* ans = (struct copy_tdata*)malloc(sizeof(struct copy_tdata));
-    ans->src = new_str(src); //由于需要在另一个线程运行，传入的参数不能在栈中，必须在使用在堆中的副本
-    ans->dst = new_str(dst); 
-    ans->thread_err = 0;
-    ans->result = unknown;
+    ans->src = new_str(src); // 源路径
+    ans->dst = new_str(dst); // 目的路径
+    // 在堆中创造scr, dst的副本
+    ans->thread_err = 0; // 存储创建线程的返回值
+    ans->result = unknown;  // 存储复制文件的结果
     return ans;
 }
 
@@ -94,19 +98,18 @@ void free_copy_tdata(struct copy_tdata* ppair){
 // 用于传入给线程的函数
 void *__copy_file(void *pvoid){
 
-    struct copy_tdata *ppair = (struct copy_tdata*)pvoid;
-    const char *src = ppair->src;
-    const char *dst = ppair->dst;
+    struct copy_tdata *pdata = (struct copy_tdata*)pvoid;
+    const char *src = pdata->src;
+    const char *dst = pdata->dst;
 
-
+    // 开始复制文件，将结果赋值给ppdata->result
     printf("%s ===> %s start\n", src, dst);
-    //printf("start copy file from %s to %s\n", src, dst);
-    if ((ppair->result = copy_file(src,dst)) == success) {
-        //printf("copy file completed from %s to %s\n", src, dst);
+    if ((pdata->result = copy_file(src,dst)) == success) {
+        // 复制文件成功
         printf("%s ===> %s completed\n", src, dst);
     }
     else {
-        //printf("copy file failed from %s to %s\n", src, dst);
+        // 复制文件失败
         printf("%s ===> %s failed\n", src, dst);
     }
 
@@ -115,12 +118,13 @@ void *__copy_file(void *pvoid){
 }
 
 
-// 使用给定的pdata，传入参数，生成线程后台拷贝文件，将线程信息记录在pdata中
+// 生成线程后台拷贝文件，将线程信息记录在pdata中
 void background_copy_file(struct copy_tdata *pdata){
     // create a thread to copy file, data store into *pdata
     int err;
 
     int  count = 0;
+    // 返回值赋值给pdata->thread_err
     pdata->thread_err= pthread_create(&pdata->tid, NULL, __copy_file, pdata);
     if(pdata->thread_err != 0){
         printf("creat threat  fail\n");
@@ -128,14 +132,14 @@ void background_copy_file(struct copy_tdata *pdata){
     }
 }
 
-// 一个简易的vector
+// 一个简易的列表
 struct thread_list {
     struct copy_tdata ** list;
     size_t size;
     size_t capacity;
 };
 
-// vector.push_back
+// 向列表插入数据
 void add_thread_data(struct thread_list *list, struct copy_tdata *th) {
 
     if (!list->list || list->size >= list->capacity) {
@@ -148,7 +152,7 @@ void add_thread_data(struct thread_list *list, struct copy_tdata *th) {
     list->list [list->size++] = th;
 
 }
-// vector.clear
+// 释放列表中的数据
 void free_thread_data(struct thread_list *list)
 {
 
@@ -172,13 +176,16 @@ void muti_copy_dir(const char *src, const char *dst)
     list.size = 0;
     list.capacity = 0;
 
+    // 遍历文件夹及子文件夹，对所有的文件生成线程进行拷贝，将线程信息添加到list中
     __muti_copy_dir(src, dst, &list);
 
     int success_count = 0;
     int failed_count = 0;
     for(int i = 0 ;i < list.size; ++i){
+        // 对所有的线程调用pthread_join，以期完成所有文件的复制才返回
         struct copy_tdata *data = list.list[i];
         pthread_join(data->tid, NULL);
+        // 对复制成功和失败的文件进行计数
         if (!data->thread_err && data->result == success)
             ++ success_count;
         else
@@ -196,31 +203,35 @@ void __muti_copy_dir(const char *src, const char *dst, struct thread_list *list)
 {
     DIR * dir;
     struct dirent * ptr;
-    //int i;
+    // 打开源目录
     dir = opendir(src);
-    {
-        DIR *dst_dir = opendir(dst);
-        if(!dst_dir && mkdir(dst, 0777)){
-            printf("create dir fail!\n");
-        }
+    // 打开目标目录
+    DIR *dst_dir = opendir(dst);
+    if(!dst_dir && mkdir(dst, 0777)){
+        printf("create dir fail!\n");
     }
+
     char *buf = (char*)malloc(100);
     char *buf2 = (char*)malloc(100);
 
     while((ptr = readdir(dir)) != NULL)
     {
+        // 跳过 . 和 .. 
         if (!strcmp("..", ptr->d_name) || !strcmp(".", ptr->d_name))
             continue;
+        // 连接路径
         path_cat(buf, src,ptr->d_name);
         path_cat(buf2, dst,ptr->d_name);
-
         if (ptr->d_type == DT_DIR){
+            // 若为目录，递归调用此函数
             __muti_copy_dir(buf, buf2, list);
         }
-        else if (ptr->d_type == DT_REG){
+        else if (ptr->d_type == DT_REG) {
+            // 若为文件，后台进行复制
             struct copy_tdata *data =  new_copy_tdata(buf,buf2);
+            // 后台复制文件，将线程信息存到data中
             background_copy_file(data);
-            // 存储ptid, 到list以供管理
+            // data添加到list中
             add_thread_data(list, data);
         } else {
             printf("not a file or dir: %s\n", buf);
