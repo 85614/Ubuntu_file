@@ -14,12 +14,17 @@ echo
 echo "Start copy"
 echo "./muti-copy-dir . ../lab4-copy"
 ./muti-copy-dir . ../lab4-copy
-#echo "./muti-copy-dir . ../lab4-copy --detail"
-#./muti-copy-dir . ../lab4-copy --detail
+
+# echo "./muti-copy-dir . ../lab4-copy --detail"
+# ./muti-copy-dir . ../lab4-copy --detail
+
 echo
 
 echo "After copy"
+echo "ls ../"
+ls ../
 echo "find ./ -type f -print0 | xargs -0 md5sum"
 find ./ -type f -print0 | xargs -0 md5sum
 echo "find ../lab4-copy/ -type f -print0 | xargs -0 md5sum"
 find ../lab4-copy/ -type f -print0 | xargs -0 md5sum
+
