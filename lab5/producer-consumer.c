@@ -55,8 +55,8 @@ enum pool_state_enum {empty, filled, producing, consuming};
 int pool_states [POOL_SIZE];
 void init(){
     for (int i = 0; i < POOL_SIZE; ++i) {
-        pthread_mutex_init(pool_ms + i, 0);
-        pthread_cond_init(pool_cs + i, 0);
+        //pthread_mutex_init(pool_ms + i, 0);
+        //pthread_cond_init(pool_cs + i, 0);
         shared_pool[i] = 0;
         pool_states[i] = empty;
     }
@@ -70,8 +70,8 @@ void init(){
 
 void destory(){
     for (int i = 0; i < POOL_SIZE; ++i) {
-        pthread_mutex_destroy(pool_ms + i);
-        pthread_cond_destroy(pool_cs + i);
+       // pthread_mutex_destroy(pool_ms + i);
+       // pthread_cond_destroy(pool_cs + i);
         shared_pool[i] = 0;
     }
 
@@ -85,8 +85,8 @@ void destory(){
 void print_pool();
 
 void my_sleep(){
-    //usleep((rand() % 5 + 1)*1000);
-    sleep((rand() % 5 + 1));
+    usleep((rand() % 5 + 1)*1000);
+    //sleep((rand() % 5 + 1));
 }
 
 //int count = 0;
@@ -102,13 +102,13 @@ int pool_TAS(int test, int set, pthread_cond_t *cond){
                 return i;
             }
         }
-        pthread_cond_wait(cond, &pool_m);            
+        pthread_cond_wait(cond, &pool_m);
     }
 }
 
 int pool_set(int i, int state) {
     pthread_mutex_lock(&pool_m);
-    shared_pool[i] = state;
+    pool_states[i] = state;
     pthread_mutex_unlock(&pool_m);
 }
 
@@ -167,11 +167,11 @@ void *produce(void*argv){
         int buf_id = pool_TAS(empty, producing, &pool_cp);
         // pthread_mutex_lock(&print_m);
 
-        while(shared_pool[buf_id]) {
+        //while(shared_pool[buf_id]) {
             // printf("producer waiting buf %d\n", buf_id);
-            pthread_cond_wait(pool_cs + buf_id, pool_ms + buf_id);
+          //  pthread_cond_wait(pool_cs + buf_id, pool_ms + buf_id);
             // printf("producer waiting finish buf %d\n", buf_id);
-        }
+        //}
 
 
 
@@ -211,7 +211,7 @@ void *produce(void*argv){
         // printf("unlock buf %d producer%d \n", buf_id, producer_id);
 
         //pthread_cond_signal(&pool_c);
-        pthread_cond_signal(pool_cs + buf_id);
+        //pthread_cond_signal(pool_cs + buf_id);
 
         //pthread_cond_signal(&pool_cc);
         //pthread_cond_broadcast(&pool_cc);
@@ -252,7 +252,7 @@ void *consume(void*argv){
         pthread_mutex_unlock(&count_m);
 
         // int buf_id = get_a_buf1(1);
-        int buf_id = pool_TAS(filled, consuming, &pool_cc)
+        int buf_id = pool_TAS(filled, consuming, &pool_cc);
 /*
         pthread_mutex_lock(&count_m);
         int is_enough = consumed_count + consuming_count == max_product;
@@ -273,11 +273,11 @@ void *consume(void*argv){
         ++ consuming_count;
         pthread_mutex_unlock(&count_m);
 */
-        while(!shared_pool[buf_id]) {
+        //while(!shared_pool[buf_id]) {
             // printf("consumer waiting buf %d\n", buf_id);
-            pthread_cond_wait(pool_cs + buf_id, pool_ms + buf_id);
+          //  pthread_cond_wait(pool_cs + buf_id, pool_ms + buf_id);
             // printf("consumer waiting finish buf %d\n", buf_id);
-        }
+        //}
 
 
 
@@ -313,7 +313,7 @@ void *consume(void*argv){
         print_pool();
         printf("\n");
         // printf("unlock buf %d consumer%d\n", buf_id, consumer_id);
-        pthread_cond_signal(pool_cs + buf_id);
+        //pthread_cond_signal(pool_cs + buf_id);
         //pthread_cond_signal(&pool_c);
 
         //pthread_cond_signal(&pool_cp);
