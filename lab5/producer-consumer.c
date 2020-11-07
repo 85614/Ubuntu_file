@@ -127,27 +127,26 @@ void print_product(struct product*ppro){
     // pthread_mutex_lock(&print_m);
 
     double t = ppro->tv.tv_sec - start_tv.tv_sec + (ppro->tv.tv_usec - start_tv.tv_usec) / 1.0e6;
-    printf("product_id: %d, producer_id: %d, comsumer_id: %d, time: %f, buf_id: %d\n",
-        ppro->product_id, ppro->producer_id, ppro->comsumer_id, t,  ppro->buf_id);
+    if (ppro->comsumer_id != -1)
+        printf("id: %d, producer: %d, comsumer: %d, time: %f, buf: %d\n",
+            ppro->product_id, ppro->producer_id, ppro->comsumer_id, t,  ppro->buf_id);
+    else
+        printf("id: %d, producer: %d, comsumer:  , time: %f, buf: %d\n",
+            ppro->product_id, ppro->producer_id, t,  ppro->buf_id);
+
     // pthread_mutex_unlock(&print_m);
-}
-void print_product1(struct product*ppro){
-    pthread_mutex_lock(&print_m);
-    printf("   product_id: %d, producer_id: %d, comsumer_id: %d, buf_id: %d\n", ppro->product_id, ppro->producer_id, ppro->comsumer_id, ppro->buf_id);
-    pthread_mutex_unlock(&print_m);
 }
 
 
 void print_pool(){
     pthread_mutex_lock(&print_m);
-    printf("current shared pool is:\n");
     for(int i = 0; i < POOL_SIZE; ++i){
+        printf("  %d: ", i);
         if (shared_pool[i])
             print_product(shared_pool[i]);
         else
             printf("null\n");
     }
-    printf("\n");
     pthread_mutex_unlock(&print_m);
 }
 
@@ -213,8 +212,9 @@ void *produce(void*argv){
         -- producing_count;
         ++ producted_count;
         pthread_mutex_unlock(&count_m);
+
         pthread_mutex_lock(&pool_m);
-        printf("-------produce----------");
+        printf("before %d produce %d in %d\n", producer_id, product_id, buf_id);
         print_pool();
         shared_pool[buf_id] = ppro;
         // printf("unlock buf %d producer%d \n", buf_id, producer_id);
@@ -224,7 +224,9 @@ void *produce(void*argv){
 
         //pthread_cond_signal(&pool_cc);
         //pthread_cond_broadcast(&pool_cc);
+        printf("after %d produce %d in %d\n", producer_id, product_id, buf_id);
         print_pool();
+        printf("\n");
         pthread_mutex_unlock(&pool_m);
 
         pthread_mutex_unlock(pool_ms + buf_id);
@@ -309,11 +311,14 @@ void *consume(void*argv){
         ++ consumed_count;
         pthread_mutex_unlock(&count_m);
         pthread_mutex_lock(&pool_m);
-        printf("-------consume----------");
+        int product_id = ppro->product_id;
+        printf("before %d consume %d in %d\n", consumer_id, product_id, buf_id);
         print_pool();
         free(ppro);
         shared_pool[buf_id] = NULL;
+        printf("after %d consume %d in %d\n", consumer_id, product_id, buf_id);
         print_pool();
+        printf("\n");
         // printf("unlock buf %d consumer%d\n", buf_id, consumer_id);
         pthread_cond_signal(pool_cs + buf_id);
         //pthread_cond_signal(&pool_c);
