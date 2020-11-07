@@ -37,8 +37,8 @@ int producing_count = 0;
 int consumed_count = 0;
 int consuming_count = 0;
 
-pthread_mutex_t pool_ms[POOL_SIZE];
-pthread_cond_t pool_cs[POOL_SIZE];
+// pthread_mutex_t pool_ms[POOL_SIZE];
+// pthread_cond_t pool_cs[POOL_SIZE];
 
 pthread_mutex_t pool_m;
 pthread_cond_t pool_cc;
@@ -51,12 +51,14 @@ pthread_t producer_tids[PRODUCER_SIZE];
 pthread_mutex_t print_m;
 
 struct timeval start_tv;
-
+enum pool_state_enum {empty, filled, producing, consuming};
+int pool_states [POOL_SIZE];
 void init(){
     for (int i = 0; i < POOL_SIZE; ++i) {
         pthread_mutex_init(pool_ms + i, 0);
         pthread_cond_init(pool_cs + i, 0);
         shared_pool[i] = 0;
+        pool_states[i] = empty;
     }
     pthread_mutex_init(&pool_m, 0);
     pthread_mutex_init(&count_m, 0);
@@ -86,42 +88,30 @@ void my_sleep(){
     //usleep((rand() % 5 + 1)*1000);
     sleep((rand() % 5 + 1));
 }
+
 //int count = 0;
-int get_a_buf1(int not_null){
-    // printf("want get buf for %d\n", target);
+
+
+int pool_TAS(int test, int set, pthread_cond_t *cond){
     pthread_mutex_lock(&pool_m);
-    //int count1 = ++count;
     while(1){
-        // printf("try get buf for %d\n", target);
         for (int i = 0; i < POOL_SIZE;++i) {
-            if (pthread_mutex_trylock(pool_ms + i) == 0){
-                // printf("test buf %d for %d\n", i, target);
-                if (!not_null == !shared_pool[i]) {
-
-                    // printf("get buf %d for %d\n", i, target);
-                    pthread_mutex_unlock(&pool_m);
-                    return i;
-                }else {
-                    pthread_mutex_unlock(pool_ms + i);
-                }
-                // print_pool();
-                //printf("%s, %d\n",__FUNCTION__, __LINE__)
-                // printf("lock buf %d\n", i );
-
-
+            if (pool_states[i] == test) {
+                pool_states[i] = set;
+                pthread_mutex_unlock(&pool_m);
+                return i;
             }
         }
-        //if(not_null)
-        //printf("----------sleep-----------%d\n", count1);
-        //pthread_mutex_unlock(&pool_m);
-        if (not_null)
-            pthread_cond_wait(&pool_cc, &pool_m);
-        else
-            pthread_cond_wait(&pool_cp, &pool_m);
-        //if(not_null)
-        //printf("----------wake up-----------%d\n", count1);
+        pthread_cond_wait(cond, &pool_m);            
     }
 }
+
+int pool_set(int i, int state) {
+    pthread_mutex_lock(&pool_m);
+    shared_pool[i] = state;
+    pthread_mutex_unlock(&pool_m);
+}
+
 
 void print_product(struct product*ppro){
     // pthread_mutex_lock(&print_m);
@@ -173,7 +163,8 @@ void *produce(void*argv){
         pthread_mutex_unlock(&count_m);
 
 
-        int buf_id = get_a_buf1(0); //has locked pool_ms[buf_id]
+        // int buf_id = get_a_buf1(0); //has locked pool_ms[buf_id]
+        int buf_id = pool_TAS(empty, producing, &pool_cp);
         // pthread_mutex_lock(&print_m);
 
         while(shared_pool[buf_id]) {
@@ -229,8 +220,9 @@ void *produce(void*argv){
         printf("\n");
         pthread_mutex_unlock(&pool_m);
 
-        pthread_mutex_unlock(pool_ms + buf_id);
+        // pthread_mutex_unlock(pool_ms + buf_id);
         pthread_mutex_lock(&pool_m);
+        pool_states[buf_id] = filled;
         pthread_cond_signal(&pool_cc);
         pthread_mutex_unlock(&pool_m);
     }
@@ -259,7 +251,8 @@ void *consume(void*argv){
         ++ consuming_count;
         pthread_mutex_unlock(&count_m);
 
-        int buf_id = get_a_buf1(1);
+        // int buf_id = get_a_buf1(1);
+        int buf_id = pool_TAS(filled, consuming, &pool_cc)
 /*
         pthread_mutex_lock(&count_m);
         int is_enough = consumed_count + consuming_count == max_product;
@@ -326,8 +319,9 @@ void *consume(void*argv){
         //pthread_cond_signal(&pool_cp);
         //pthread_cond_broadcast(&pool_cp);
         pthread_mutex_unlock(&pool_m);
-        pthread_mutex_unlock(pool_ms + buf_id);
+        //pthread_mutex_unlock(pool_ms + buf_id);
         pthread_mutex_lock(&pool_m);
+        pool_states[buf_id] = empty;
         pthread_cond_signal(&pool_cp);
         pthread_mutex_unlock(&pool_m);
     }
