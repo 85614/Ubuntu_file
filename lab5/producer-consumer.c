@@ -55,8 +55,6 @@ enum pool_state_enum {empty, filled, producing, consuming};
 int pool_states [POOL_SIZE];
 void init(){
     for (int i = 0; i < POOL_SIZE; ++i) {
-        //pthread_mutex_init(pool_ms + i, 0);
-        //pthread_cond_init(pool_cs + i, 0);
         shared_pool[i] = 0;
         pool_states[i] = empty;
     }
@@ -70,8 +68,6 @@ void init(){
 
 void destory(){
     for (int i = 0; i < POOL_SIZE; ++i) {
-       // pthread_mutex_destroy(pool_ms + i);
-       // pthread_cond_destroy(pool_cs + i);
         shared_pool[i] = 0;
     }
 
@@ -89,7 +85,6 @@ void my_sleep(){
     //sleep((rand() % 5 + 1));
 }
 
-//int count = 0;
 
 
 int pool_TAS(int test, int set, pthread_cond_t *cond){
@@ -106,16 +101,10 @@ int pool_TAS(int test, int set, pthread_cond_t *cond){
     }
 }
 
-int pool_set(int i, int state) {
-    pthread_mutex_lock(&pool_m);
-    pool_states[i] = state;
-    pthread_mutex_unlock(&pool_m);
-}
+
 
 
 void print_product(struct product*ppro){
-    // pthread_mutex_lock(&print_m);
-
     double t = ppro->tv.tv_sec - start_tv.tv_sec + (ppro->tv.tv_usec - start_tv.tv_usec) / 1.0e6;
     if (ppro->comsumer_id != -1)
         printf("id: %d, producer: %d, comsumer: %d, time: %f, buf: %d\n",
@@ -123,8 +112,6 @@ void print_product(struct product*ppro){
     else
         printf("id: %d, producer: %d, comsumer:  , time: %f, buf: %d\n",
             ppro->product_id, ppro->producer_id, t,  ppro->buf_id);
-
-    // pthread_mutex_unlock(&print_m);
 }
 
 
@@ -146,16 +133,7 @@ void *produce(void*argv){
         pthread_mutex_lock(&count_m);
         int is_full = producted_count + producing_count == max_product;
         if (is_full) {
-            //pthread_cond_signal(pool_cs + buf_id);
-            //pthread_cond_signal(&pool_c);
-            //pthread_cond_broadcast(&pool_c);
             pthread_mutex_unlock(&count_m);
-            //pthread_mutex_unlock(pool_ms + buf_id);
-
-
-            // pthread_mutex_lock(&print_m);
-            //printf("produce enough with %d producing\n", producing_count);
-            // pthread_mutex_unlock(&print_m);
             break;
         }
         ++ producing_count;
@@ -163,21 +141,8 @@ void *produce(void*argv){
         pthread_mutex_unlock(&count_m);
 
 
-        // int buf_id = get_a_buf1(0); //has locked pool_ms[buf_id]
+        
         int buf_id = pool_TAS(empty, producing, &pool_cp);
-        // pthread_mutex_lock(&print_m);
-
-        //while(shared_pool[buf_id]) {
-            // printf("producer waiting buf %d\n", buf_id);
-          //  pthread_cond_wait(pool_cs + buf_id, pool_ms + buf_id);
-            // printf("producer waiting finish buf %d\n", buf_id);
-        //}
-
-
-
-        // printf("lock buf %d producer%d \n", buf_id, producer_id);
-        // pthread_mutex_lock(&print_m);
-
 
         my_sleep();
 
@@ -190,15 +155,6 @@ void *produce(void*argv){
         gettimeofday(&ppro->tv, NULL);
 
 
-
-        // pthread_mutex_lock(&print_m);
-
-        // printf("produce, producer: %d, buf: %d, product: %d\n", producer_id, buf_id, ppro->product_id);
-        // printf("produce: ");
-        // print_product(ppro);
-        // pthread_mutex_unlock(&print_m);
-
-
         pthread_mutex_lock(&count_m);
         -- producing_count;
         ++ producted_count;
@@ -208,19 +164,13 @@ void *produce(void*argv){
         printf("before %d produce %d in %d\n", producer_id, product_id, buf_id);
         print_pool();
         shared_pool[buf_id] = ppro;
-        // printf("unlock buf %d producer%d \n", buf_id, producer_id);
-
-        //pthread_cond_signal(&pool_c);
-        //pthread_cond_signal(pool_cs + buf_id);
-
-        //pthread_cond_signal(&pool_cc);
-        //pthread_cond_broadcast(&pool_cc);
+        
         printf("after %d produce %d in %d\n", producer_id, product_id, buf_id);
         print_pool();
         printf("\n");
         pthread_mutex_unlock(&pool_m);
 
-        // pthread_mutex_unlock(pool_ms + buf_id);
+        
         pthread_mutex_lock(&pool_m);
         pool_states[buf_id] = filled;
         pthread_cond_signal(&pool_cc);
@@ -236,69 +186,21 @@ void *consume(void*argv){
         int is_enough = consumed_count + consuming_count == max_product;
 
         if (is_enough) {
-            //pthread_cond_signal(pool_cs + buf_id);
-            //pthread_cond_signal(&pool_c);
-            //pthread_cond_broadcast(&pool_c);
             pthread_mutex_unlock(&count_m);
-            //pthread_mutex_unlock(pool_ms + buf_id);
-
-            // pthread_mutex_lock(&print_m);
-            //printf("consume enough with %d consuming\n", consuming_count);
-            // pthread_mutex_unlock(&print_m);
             break;
         }
 
         ++ consuming_count;
         pthread_mutex_unlock(&count_m);
-
-        // int buf_id = get_a_buf1(1);
+        
         int buf_id = pool_TAS(filled, consuming, &pool_cc);
-/*
-        pthread_mutex_lock(&count_m);
-        int is_enough = consumed_count + consuming_count == max_product;
-
-        if (is_enough) {
-            pthread_cond_signal(pool_cs + buf_id);
-            //pthread_cond_signal(&pool_c);
-            pthread_cond_broadcast(&pool_c);
-            pthread_mutex_unlock(&count_m);
-            pthread_mutex_unlock(pool_ms + buf_id);
-
-            // pthread_mutex_lock(&print_m);
-            printf("consume enough\n");
-            // pthread_mutex_unlock(&print_m);
-            break;
-        }
-
-        ++ consuming_count;
-        pthread_mutex_unlock(&count_m);
-*/
-        //while(!shared_pool[buf_id]) {
-            // printf("consumer waiting buf %d\n", buf_id);
-          //  pthread_cond_wait(pool_cs + buf_id, pool_ms + buf_id);
-            // printf("consumer waiting finish buf %d\n", buf_id);
-        //}
-
-
-
-
-        // pthread_mutex_lock(&print_m);
-        // printf("lock buf %d consumer%d \n", buf_id, consumer_id);
-        // pthread_mutex_unlock(&print_m);
-
-
 
         struct product *ppro = shared_pool[buf_id];
         my_sleep();
-        // printf("consume, consumer: %d, buf: %d, product: %d\n", consumer_id, buf_id, ppro->product_id);
-        // pthread_mutex_lock(&print_m);
+        
 
         ppro->comsumer_id = consumer_id;
-        // printf("consume: ");
-        // print_product1(ppro);
-        // pthread_mutex_unlock(&print_m);
-
-
+        
         pthread_mutex_lock(&count_m);
         -- consuming_count;
         ++ consumed_count;
@@ -312,14 +214,9 @@ void *consume(void*argv){
         printf("after %d consume %d in %d\n", consumer_id, product_id, buf_id);
         print_pool();
         printf("\n");
-        // printf("unlock buf %d consumer%d\n", buf_id, consumer_id);
-        //pthread_cond_signal(pool_cs + buf_id);
-        //pthread_cond_signal(&pool_c);
-
-        //pthread_cond_signal(&pool_cp);
-        //pthread_cond_broadcast(&pool_cp);
         pthread_mutex_unlock(&pool_m);
-        //pthread_mutex_unlock(pool_ms + buf_id);
+
+        
         pthread_mutex_lock(&pool_m);
         pool_states[buf_id] = empty;
         pthread_cond_signal(&pool_cp);
@@ -355,18 +252,4 @@ void main(void)
     }
     printf("\nfinish!!!!!\n");
     destory();
-}
-
-void old_main(){
-    int     err;
-    pthread_t tid;
-    while (1)
-    {
-           err= pthread_create(&tid, NULL, ThreadFunc, NULL);
-           if(err != 0){
-               printf("can't create thread: %s\n",strerror(err));
-           break;
-           }
-          usleep(2000);
-    }
 }
