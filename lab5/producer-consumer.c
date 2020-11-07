@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <math.h>
+#include <sys/time.h>
 void *ThreadFunc()
 {
     static int count = 1;
@@ -15,7 +16,7 @@ struct product {
     int product_id;
     int producer_id;
     int comsumer_id;
-    // produce_time
+    struct timeval tv;
     int buf_id;
 };
 
@@ -48,6 +49,9 @@ pthread_t consumer_tids[CONSUMER_SIZE];
 pthread_t producer_tids[PRODUCER_SIZE];
 
 pthread_mutex_t print_m;
+
+struct timeval start_tv;
+
 void init(){
     for (int i = 0; i < POOL_SIZE; ++i) {
         pthread_mutex_init(pool_ms + i, 0);
@@ -59,6 +63,7 @@ void init(){
     pthread_cond_init(&pool_cc, 0);
     pthread_cond_init(&pool_cp, 0);
     pthread_mutex_init(&print_m, 0);
+    gettimeofday(&start_tv, NULL);
 }
 
 void destory(){
@@ -78,14 +83,14 @@ void destory(){
 void print_pool();
 
 void my_sleep(){
-    usleep((rand() % 5 + 1)*1000);
-
+    //usleep((rand() % 5 + 1)*1000);
+    sleep((rand() % 5 + 1));
 }
-int count = 0;
+//int count = 0;
 int get_a_buf1(int not_null){
     // printf("want get buf for %d\n", target);
     pthread_mutex_lock(&pool_m);
-    int count1 = ++count;
+    //int count1 = ++count;
     while(1){
         // printf("try get buf for %d\n", target);
         for (int i = 0; i < POOL_SIZE;++i) {
@@ -106,21 +111,24 @@ int get_a_buf1(int not_null){
 
             }
         }
-        if(not_null)
-        printf("----------sleep-----------%d\n", count1);
+        //if(not_null)
+        //printf("----------sleep-----------%d\n", count1);
         //pthread_mutex_unlock(&pool_m);
         if (not_null)
             pthread_cond_wait(&pool_cc, &pool_m);
         else
             pthread_cond_wait(&pool_cp, &pool_m);
-        if(not_null)
-        printf("----------wake up-----------%d\n", count1);
+        //if(not_null)
+        //printf("----------wake up-----------%d\n", count1);
     }
 }
 
 void print_product(struct product*ppro){
     // pthread_mutex_lock(&print_m);
-    printf("product_id: %d, producer_id: %d, comsumer_id: %d, buf_id: %d\n", ppro->product_id, ppro->producer_id, ppro->comsumer_id, ppro->buf_id);
+
+    double t = ppro->tv.tv_sec - start_tv.tv_sec + (ppro->tv.tv_usec - start_tv.tv_usec) / 1.0e6;
+    printf("product_id: %d, producer_id: %d, comsumer_id: %d, time: %f, buf_id: %d\n",
+        ppro->product_id, ppro->producer_id, ppro->comsumer_id, t,  ppro->buf_id);
     // pthread_mutex_unlock(&print_m);
 }
 void print_product1(struct product*ppro){
@@ -157,7 +165,7 @@ void *produce(void*argv){
 
 
             // pthread_mutex_lock(&print_m);
-            printf("produce enough with %d producing\n", producing_count);
+            //printf("produce enough with %d producing\n", producing_count);
             // pthread_mutex_unlock(&print_m);
             break;
         }
@@ -181,7 +189,7 @@ void *produce(void*argv){
         // pthread_mutex_lock(&print_m);
 
 
-
+        my_sleep();
 
 
         struct product* ppro = (struct product*)malloc(sizeof(struct product));
@@ -189,9 +197,9 @@ void *produce(void*argv){
         ppro->producer_id = producer_id;
         ppro->product_id = product_id;
         ppro->comsumer_id = -1;
+        gettimeofday(&ppro->tv, NULL);
 
 
-        my_sleep();
 
         // pthread_mutex_lock(&print_m);
 
@@ -241,7 +249,7 @@ void *consume(void*argv){
             //pthread_mutex_unlock(pool_ms + buf_id);
 
             // pthread_mutex_lock(&print_m);
-            printf("consume enough with %d consuming\n", consuming_count);
+            //printf("consume enough with %d consuming\n", consuming_count);
             // pthread_mutex_unlock(&print_m);
             break;
         }
@@ -326,7 +334,7 @@ void *consume(void*argv){
 void main(void)
 {
     init();
-    printf("inited");
+
     for (int i = 0; i < CONSUMER_SIZE; ++i) {
         int err = pthread_create(consumer_tids + i, NULL, consume, consumer_tids + i);
         if (err != 0) {
