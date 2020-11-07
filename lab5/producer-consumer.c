@@ -48,7 +48,7 @@ pthread_mutex_t count_m;
 pthread_t consumer_tids[CONSUMER_SIZE];
 pthread_t producer_tids[PRODUCER_SIZE];
 
-pthread_mutex_t print_m;
+
 
 struct timeval start_tv;
 enum pool_state_enum {empty, filled, producing, consuming};
@@ -62,7 +62,7 @@ void init(){
     pthread_mutex_init(&count_m, 0);
     pthread_cond_init(&pool_cc, 0);
     pthread_cond_init(&pool_cp, 0);
-    pthread_mutex_init(&print_m, 0);
+
     gettimeofday(&start_tv, NULL);
 }
 
@@ -75,7 +75,7 @@ void destory(){
     pthread_mutex_destroy(&count_m);
     pthread_cond_destroy(&pool_cc);
     pthread_cond_destroy(&pool_cp);
-    pthread_mutex_destroy(&print_m);
+
 }
 
 void print_pool();
@@ -116,7 +116,7 @@ void print_product(struct product*ppro){
 
 
 void print_pool(){
-    pthread_mutex_lock(&print_m);
+
     for(int i = 0; i < POOL_SIZE; ++i){
         printf("  %d: ", i);
         if (shared_pool[i])
@@ -124,7 +124,7 @@ void print_pool(){
         else
             printf("null\n");
     }
-    pthread_mutex_unlock(&print_m);
+
 }
 
 void *produce(void*argv){
@@ -141,7 +141,7 @@ void *produce(void*argv){
         pthread_mutex_unlock(&count_m);
 
 
-        
+
         int buf_id = pool_TAS(empty, producing, &pool_cp);
 
         my_sleep();
@@ -164,13 +164,13 @@ void *produce(void*argv){
         printf("before %d produce %d in %d\n", producer_id, product_id, buf_id);
         print_pool();
         shared_pool[buf_id] = ppro;
-        
+
         printf("after %d produce %d in %d\n", producer_id, product_id, buf_id);
         print_pool();
         printf("\n");
         pthread_mutex_unlock(&pool_m);
 
-        
+
         pthread_mutex_lock(&pool_m);
         pool_states[buf_id] = filled;
         pthread_cond_signal(&pool_cc);
@@ -192,15 +192,15 @@ void *consume(void*argv){
 
         ++ consuming_count;
         pthread_mutex_unlock(&count_m);
-        
+
         int buf_id = pool_TAS(filled, consuming, &pool_cc);
 
         struct product *ppro = shared_pool[buf_id];
         my_sleep();
-        
+
 
         ppro->comsumer_id = consumer_id;
-        
+
         pthread_mutex_lock(&count_m);
         -- consuming_count;
         ++ consumed_count;
@@ -216,7 +216,7 @@ void *consume(void*argv){
         printf("\n");
         pthread_mutex_unlock(&pool_m);
 
-        
+
         pthread_mutex_lock(&pool_m);
         pool_states[buf_id] = empty;
         pthread_cond_signal(&pool_cp);
