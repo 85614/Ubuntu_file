@@ -164,7 +164,8 @@ void *produce(void*argv){
         pthread_mutex_lock(&count_mutex);
         -- producing_count;
         ++ producted_count;
-        ppro->product_id = producted_count;
+        int product_id = producted_count;
+        ppro->product_id = product_id;
         pthread_mutex_unlock(&count_mutex);
 
         // 打印生产前后缓冲区状态
@@ -178,7 +179,6 @@ void *produce(void*argv){
         printf("\n");
         // pthread_mutex_unlock(&pool_mutex);
 
-        
         // pthread_mutex_lock(&pool_mutex);
         pool_states[buf_id] = filled; // 更新buf_id处的缓冲区区域状态为filled
         ++ pool_filled_count; // pool_filled_count 加1
@@ -230,8 +230,7 @@ void *consume(void*argv){
         printf("\n");
         // pthread_mutex_unlock(&pool_mutex);
 
-
-        // pthread_mutex_lock(&pool_mutex); 
+        // pthread_mutex_lock(&pool_mutex);
         pool_states[buf_id] = empty; // 更新缓冲区区域状态为empty
         ++ pool_empty_count; // pool_empty_count 加1
         pthread_cond_signal(&condp); // 唤醒可能存在的某个正在等待的生产者
