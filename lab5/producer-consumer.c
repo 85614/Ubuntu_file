@@ -140,9 +140,8 @@ void *produce(void*argv){
         pthread_mutex_unlock(&count_mutex);
 
         // 获取状态为empty的缓冲区区域，并设置状态为producing, 不成功在condp上wait，pool_empty_count 减1
+        int buf_id = get_buf(empty, producing, &condp); // 过程中需要获取pool_mutex，成功时释放pool_mutex
         // 直至此线程设置pool_states[buf_id]为filled，才可以将shared_pool[buf_id]交给某个生产者
-        int buf_id = get_buf(empty, producing, &condp); // 需要获取pool_mutex
-
 
         // 生产
         my_sleep();
@@ -197,8 +196,8 @@ void *consume(void*argv){
         pthread_mutex_unlock(&count_mutex);
 
         // 获取状态为filled的缓冲区区域，并设置状态为consuming, 不成功在condc上wait，pool_filled_count 减1
+        int buf_id = get_buf(filled, consuming, &condc); // 过程中获取pool_mutex，成功时释放锁
         // 直至此线程设置pool_states[buf_id]为empty之前，才能将shared_pool[buf_id]交给某个生产者
-        int buf_id = get_buf(filled, consuming, &condc); // 需要获取pool_mutex
 
         struct product *ppro = shared_pool[buf_id];
 
