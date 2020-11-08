@@ -88,10 +88,10 @@ void my_sleep(){
     sleep((rand() % 5 + 1));
 }
 
+typedef int pool_state_enum;
 
 
-
-int get_buf(pool_state_enum test, pool_state_enum set, pthread_cond_t *cnod) {
+int get_buf(pool_state_enum test, pool_state_enum set, pthread_cond_t *cond) {
     // 获取状态位test的缓冲区编号，设置状态为set，不成功则使用条件变量cond进行wait
     pthread_mutex_lock(&pool_mutex);
     while(1){
