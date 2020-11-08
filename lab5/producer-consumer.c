@@ -5,12 +5,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include <sys/time.h>
-void *ThreadFunc()
-{
-    static int count = 1;
-    printf ("Create thread %d\n", count);
-    count++;
-}
 
 struct product {
     int product_id;
