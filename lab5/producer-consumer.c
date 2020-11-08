@@ -37,44 +37,40 @@ int producing_count = 0;
 int consumed_count = 0;
 int consuming_count = 0;
 
-// pthread_mutex_t pool_ms[POOL_SIZE];
-// pthread_cond_t pool_cs[POOL_SIZE];
 
-pthread_mutex_t pool_m;
-pthread_cond_t pool_cc;
-pthread_cond_t pool_cp;
-pthread_mutex_t count_m;
+
+pthread_mutex_t pool_mutex;
+pthread_cond_t condc;
+pthread_cond_t condp;
+pthread_mutex_t count_mutex;
 
 pthread_t consumer_tids[CONSUMER_SIZE];
 pthread_t producer_tids[PRODUCER_SIZE];
 
-
-
 struct timeval start_tv;
+
 enum pool_state_enum {empty, filled, producing, consuming};
+
 int pool_states [POOL_SIZE];
+
 void init(){
     for (int i = 0; i < POOL_SIZE; ++i) {
         shared_pool[i] = 0;
         pool_states[i] = empty;
     }
-    pthread_mutex_init(&pool_m, 0);
-    pthread_mutex_init(&count_m, 0);
-    pthread_cond_init(&pool_cc, 0);
-    pthread_cond_init(&pool_cp, 0);
+    pthread_mutex_init(&pool_mutex, 0);
+    pthread_mutex_init(&count_mutex, 0);
+    pthread_cond_init(&condc, 0);
+    pthread_cond_init(&condp, 0);
 
     gettimeofday(&start_tv, NULL);
 }
 
 void destory(){
-    for (int i = 0; i < POOL_SIZE; ++i) {
-        shared_pool[i] = 0;
-    }
-
-    pthread_mutex_destroy(&pool_m);
-    pthread_mutex_destroy(&count_m);
-    pthread_cond_destroy(&pool_cc);
-    pthread_cond_destroy(&pool_cp);
+    pthread_mutex_destroy(&pool_mutex);
+    pthread_mutex_destroy(&count_mutex);
+    pthread_cond_destroy(&condc);
+    pthread_cond_destroy(&condp);
 
 }
 
@@ -85,23 +81,27 @@ void my_sleep(){
     //sleep((rand() % 5 + 1));
 }
 
+int pool_empty_count = POOL_SIZE;
+int pool_filled_count = 0;
 
 
-int pool_TAS(int test, int set, pthread_cond_t *cond){
-    pthread_mutex_lock(&pool_m);
+int get_buf(pool_state_enum test, pool_state_enum set, pthread_cond_t *cnod) {
+    pthread_mutex_lock(&pool_mutex);
     while(1){
-        for (int i = 0; i < POOL_SIZE;++i) {
-            if (pool_states[i] == test) {
-                pool_states[i] = set;
-                pthread_mutex_unlock(&pool_m);
-                return i;
+        if (test == empty && pool_empty_count > 0 ||
+            test == filled && pool_filled_count > 0) {
+            for (int i = 0; i < POOL_SIZE;++i) {
+                if (pool_states[i] == test) {
+                    pool_states[i] = set;
+                    test == empty ? -- pool_empty_count : -- pool_filled_count;
+                    pthread_mutex_unlock(&pool_mutex);
+                    return i;
+                }
             }
         }
-        pthread_cond_wait(cond, &pool_m);
+        pthread_cond_wait(cond, &pool_mutex);
     }
 }
-
-
 
 
 void print_product(struct product*ppro){
@@ -130,19 +130,18 @@ void print_pool(){
 void *produce(void*argv){
     int producer_id = (pthread_t*)argv - producer_tids;
     while(1){
-        pthread_mutex_lock(&count_m);
+        pthread_mutex_lock(&count_mutex);
         int is_full = producted_count + producing_count == max_product;
         if (is_full) {
-            pthread_mutex_unlock(&count_m);
+            pthread_mutex_unlock(&count_mutex);
             break;
         }
         ++ producing_count;
-        int product_id = producted_count + producing_count;
-        pthread_mutex_unlock(&count_m);
+        // int product_id = producted_count + producing_count;
+        pthread_mutex_unlock(&count_mutex);
 
-
-
-        int buf_id = pool_TAS(empty, producing, &pool_cp);
+    
+        int buf_id = get_buf(empty, producing, &condp);
 
         my_sleep();
 
@@ -150,17 +149,18 @@ void *produce(void*argv){
         struct product* ppro = (struct product*)malloc(sizeof(struct product));
         ppro->buf_id = buf_id;
         ppro->producer_id = producer_id;
-        ppro->product_id = product_id;
+        // ppro->product_id = product_id;
         ppro->comsumer_id = -1;
         gettimeofday(&ppro->tv, NULL);
 
 
-        pthread_mutex_lock(&count_m);
+        pthread_mutex_lock(&count_mutex);
         -- producing_count;
         ++ producted_count;
-        pthread_mutex_unlock(&count_m);
+        ppro->product_id = producted_count;
+        pthread_mutex_unlock(&count_mutex);
 
-        pthread_mutex_lock(&pool_m);
+        pthread_mutex_lock(&pool_mutex);
         printf("before %d produce %d in %d\n", producer_id, product_id, buf_id);
         print_pool();
         shared_pool[buf_id] = ppro;
@@ -168,13 +168,14 @@ void *produce(void*argv){
         printf("after %d produce %d in %d\n", producer_id, product_id, buf_id);
         print_pool();
         printf("\n");
-        pthread_mutex_unlock(&pool_m);
+        pthread_mutex_unlock(&pool_mutex);
 
 
-        pthread_mutex_lock(&pool_m);
+        pthread_mutex_lock(&pool_mutex);
         pool_states[buf_id] = filled;
-        pthread_cond_signal(&pool_cc);
-        pthread_mutex_unlock(&pool_m);
+        ++ pool_filled_count;
+        pthread_cond_signal(&condc);
+        pthread_mutex_unlock(&pool_mutex);
     }
 }
 
@@ -182,18 +183,18 @@ void *consume(void*argv){
     int consumer_id = (pthread_t*)argv - consumer_tids;
     while(1) {
 
-        pthread_mutex_lock(&count_m);
+        pthread_mutex_lock(&count_mutex);
         int is_enough = consumed_count + consuming_count == max_product;
 
         if (is_enough) {
-            pthread_mutex_unlock(&count_m);
+            pthread_mutex_unlock(&count_mutex);
             break;
         }
 
         ++ consuming_count;
-        pthread_mutex_unlock(&count_m);
+        pthread_mutex_unlock(&count_mutex);
 
-        int buf_id = pool_TAS(filled, consuming, &pool_cc);
+        int buf_id = get_buf(filled, consuming, &condc);
 
         struct product *ppro = shared_pool[buf_id];
         my_sleep();
@@ -201,11 +202,11 @@ void *consume(void*argv){
 
         ppro->comsumer_id = consumer_id;
 
-        pthread_mutex_lock(&count_m);
+        pthread_mutex_lock(&count_mutex);
         -- consuming_count;
         ++ consumed_count;
-        pthread_mutex_unlock(&count_m);
-        pthread_mutex_lock(&pool_m);
+        pthread_mutex_unlock(&count_mutex);
+        pthread_mutex_lock(&pool_mutex);
         int product_id = ppro->product_id;
         printf("before %d consume %d in %d\n", consumer_id, product_id, buf_id);
         print_pool();
@@ -214,13 +215,14 @@ void *consume(void*argv){
         printf("after %d consume %d in %d\n", consumer_id, product_id, buf_id);
         print_pool();
         printf("\n");
-        pthread_mutex_unlock(&pool_m);
+        pthread_mutex_unlock(&pool_mutex);
 
 
-        pthread_mutex_lock(&pool_m);
+        pthread_mutex_lock(&pool_mutex);
         pool_states[buf_id] = empty;
-        pthread_cond_signal(&pool_cp);
-        pthread_mutex_unlock(&pool_m);
+        ++ pool_empty_count;
+        pthread_cond_signal(&condp);
+        pthread_mutex_unlock(&pool_mutex);
     }
 }
 
