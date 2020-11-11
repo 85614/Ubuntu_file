@@ -109,12 +109,13 @@ void print_product(struct product*ppro){
         printf("comsumer: %d, ", ppro->comsumer_id);
     else
         printf("comsumer:  , ");
-    printf("time: %d-%02d-%02d %02d:%02d:%02d,  ", ppro->t->tm_year + 1900,
-        ppro->t->tm_mon + 1,
-        ppro->t->tm_mday,
-        ppro->t->tm_hour,
-        ppro->t->tm_min,
-        ppro->t->tm_sec);
+    tm* t=localtime(&ppro->t);
+    printf("time: %d-%02d-%02d %02d:%02d:%02d,  ", t->tm_year + 1900,
+        t->tm_mon + 1,
+        t->tm_mday,
+        t->tm_hour,
+        t->tm_min,
+        t->tm_sec);
     printf("buf: %d\n", ppro->buf_id);
 }
 
