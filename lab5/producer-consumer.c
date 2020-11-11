@@ -4,13 +4,13 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <math.h>
-#include <sys/time.h>
+#include <time.h>
 
 struct product {
     int product_id;
     int producer_id;
     int comsumer_id;
-    struct timeval tv;
+    time_t t;
     int buf_id;
 };
 
@@ -51,8 +51,6 @@ pthread_cond_t condp; // 生产者的条件变量
 pthread_t consumer_tids[CONSUMER_SIZE];
 pthread_t producer_tids[PRODUCER_SIZE];
 
-struct timeval start_tv; // 开始生产的时间
-
 
 void init(){
     for (int i = 0; i < POOL_SIZE; ++i) {
@@ -64,7 +62,6 @@ void init(){
     pthread_cond_init(&condc, 0);
     pthread_cond_init(&condp, 0);
 
-    gettimeofday(&start_tv, NULL);
 }
 
 void destory(){
@@ -107,12 +104,18 @@ int get_buf(pool_state_enum test, pool_state_enum set, pthread_cond_t *cond) {
 
 void print_product(struct product*ppro){
     double t = ppro->tv.tv_sec - start_tv.tv_sec + (ppro->tv.tv_usec - start_tv.tv_usec) / 1.0e6;
+    printf("id: %d, producer: %d, ", ppro->product_id, ppro->producer_id);
     if (ppro->comsumer_id != -1)
-        printf("id: %d, producer: %d, comsumer: %d, time: %f, buf: %d\n",
-            ppro->product_id, ppro->producer_id, ppro->comsumer_id, t,  ppro->buf_id);
+        printf("comsumer: %d, ", ppro->comsumer_id);
     else
-        printf("id: %d, producer: %d, comsumer:  , time: %f, buf: %d\n",
-            ppro->product_id, ppro->producer_id, t,  ppro->buf_id);
+        printf("comsumer:  , ");
+    printf("time: %d-%02d-%02d %02d:%02d:%02d,  ", ppro->t->tm_year + 1900,
+        ppro->t->tm_mon + 1,
+        ppro->t->tm_mday,
+        ppro->t->tm_hour,
+        ppro->t->tm_min,
+        ppro->t->tm_sec);
+    printf("buf: %d\n", ppro->buf_id);
 }
 
 
@@ -122,7 +125,7 @@ void print_pool(){
         if (shared_pool[i])
             print_product(shared_pool[i]);
         else
-            printf("null\n");
+            printf("NULL\n");
     }
 }
 
@@ -151,7 +154,7 @@ void *produce(void*argv){
         ppro->producer_id = producer_id;
         // ppro->product_id = product_id;
         ppro->comsumer_id = -1;
-        gettimeofday(&ppro->tv, NULL);
+        ppro->t = time(NULL);
 
 
         pthread_mutex_lock(&count_mutex);
@@ -214,7 +217,7 @@ void *consume(void*argv){
         // 打印消费时，消费后的缓冲区
         pthread_mutex_lock(&pool_mutex);
         int product_id = ppro->product_id;
-        printf("when %d consume %d in %d\n", consumer_id, product_id, buf_id);
+        printf("before %d consume %d in %d\n", consumer_id, product_id, buf_id);
         print_pool();
         free(ppro);
         shared_pool[buf_id] = NULL;
