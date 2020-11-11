@@ -103,13 +103,13 @@ int get_buf(pool_state_enum test, pool_state_enum set, pthread_cond_t *cond) {
 
 
 void print_product(struct product*ppro){
-    double t = ppro->tv.tv_sec - start_tv.tv_sec + (ppro->tv.tv_usec - start_tv.tv_usec) / 1.0e6;
-    printf("id: %d, producer: %d, ", ppro->product_id, ppro->producer_id);
+
+    printf("id: %02d, producer: %d, ", ppro->product_id, ppro->producer_id);
     if (ppro->comsumer_id != -1)
         printf("comsumer: %d, ", ppro->comsumer_id);
     else
         printf("comsumer:  , ");
-    tm* t=localtime(&ppro->t);
+    struct tm* t=localtime(&ppro->t);
     printf("time: %d-%02d-%02d %02d:%02d:%02d,  ", t->tm_year + 1900,
         t->tm_mon + 1,
         t->tm_mday,
