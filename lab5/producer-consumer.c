@@ -26,7 +26,7 @@ struct product *shared_pool[POOL_SIZE]; // 缓冲区
 int pool_empty_count = POOL_SIZE;
 int pool_filled_count = 0;
 
-enum pool_state_enum {empty, filled, producing, consuming}; 
+enum pool_state_enum {empty, filled, producing, consuming};
 int pool_states [POOL_SIZE]; // 缓冲区状态， 代替缓冲区每个区域一个mutex
 // 只有在状态为empty时，允许某个生产者访问
 // 只有在状态为filled时，允许某个消费者者访问
@@ -159,44 +159,43 @@ void *produce(void*argv){
         // 直至此线程设置pool_states[buf_id]为filled，才可以将shared_pool[buf_id]交给某个生产者
 
 
-         // 打印生产前缓冲区状态
+        // 生产
+        pthread_mutex_lock(&count_mutex); // 获得计数锁 读取更新产品计数
+        -- producing_count;
+        ++ producted_count;
+        int product_id = producted_count;
+        pthread_mutex_unlock(&count_mutex); // 释放计数锁
+
+        // 打印生产前缓冲区状态
         pthread_mutex_lock(&pool_mutex); // 获取缓冲区锁
-        printf("before %d produce %d in %d ", producer_id, product_id, buf_id);
+        printf("before %d produce %02d in buf %d, ", producer_id, product_id, buf_id);
         print_time();
         printf("\n");
         print_pool();
+        printf("\n");
         pthread_mutex_unlock(&pool_mutex); // 释放缓冲区锁
 
-        // 生产
+        //
         my_sleep();
 
         struct product* ppro = (struct product*)malloc(sizeof(struct product));
         ppro->buf_id = buf_id;
         ppro->producer_id = producer_id;
-        // ppro->product_id = product_id;
         ppro->comsumer_id = -1;
-        ppro->t = time(NULL);
-
-
-        pthread_mutex_lock(&count_mutex); // 获得计数锁 读取更新产品计数
-        -- producing_count;
-        ++ producted_count;
-        int product_id = producted_count;
         ppro->product_id = product_id;
-        pthread_mutex_unlock(&count_mutex); // 释放计数锁
+        ppro->t = time(NULL);
 
         // 打印生产后缓冲区状态
         pthread_mutex_lock(&pool_mutex); // 获取缓冲区锁
-        
+
         shared_pool[buf_id] = ppro;
-        printf("after %d produce %d in %d ", producer_id, product_id, buf_id);
+        printf("after %d produce %02d in buf %d, ", producer_id, product_id, buf_id);
         print_time();
         printf("\n");
         print_pool();
         printf("\n");
-        // pthread_mutex_unlock(&pool_mutex);
 
-        // pthread_mutex_lock(&pool_mutex);
+        //
         pool_states[buf_id] = filled; // 更新buf_id处的缓冲区区域状态为filled
         ++ pool_filled_count; // pool_filled_count 加1
         pthread_cond_signal(&condc); //唤醒可能存在的某个正在等待的消费者
@@ -223,19 +222,22 @@ void *consume(void*argv){
         int buf_id = get_buf(filled, consuming, &condc); // 需获取pool_mutex，成功时释放锁
         // 直至此线程设置pool_states[buf_id]为empty之前，才能将shared_pool[buf_id]交给某个生产者
 
+
         // 打印消费时，消费后的缓冲区
         pthread_mutex_lock(&pool_mutex); // 获取缓冲区锁
+        struct product *ppro = shared_pool[buf_id];
         int product_id = ppro->product_id;
-        printf("before %d consume %d in %d ", consumer_id, product_id, buf_id);
+        printf("before %d consume %02d in buf %d, ", consumer_id, product_id, buf_id);
         print_time();
         printf("\n");
         print_pool();
+        printf("\n");
         pthread_mutex_unlock(&pool_mutex); // 释放缓冲区锁
 
         // 消费
         my_sleep();
-        
-        struct product *ppro = shared_pool[buf_id];
+
+
         ppro->comsumer_id = consumer_id;
 
         pthread_mutex_lock(&count_mutex); // 获得计数锁 读取更新产品计数
@@ -245,16 +247,16 @@ void *consume(void*argv){
 
         // 打印消费时，消费后的缓冲区
         pthread_mutex_lock(&pool_mutex); // 获取缓冲区锁
-        free(ppro);
         shared_pool[buf_id] = NULL;
-        printf("after %d consume %d in %d ", consumer_id, product_id, buf_id);
+        printf("after %d consume %02d in buf %d, ", consumer_id, product_id, buf_id);
         print_time();
-        printf("\n");
+        printf("\np%02d: ", product_id);
+        print_product(ppro);
+        free(ppro);
         print_pool();
         printf("\n");
-        // pthread_mutex_unlock(&pool_mutex);
 
-        // pthread_mutex_lock(&pool_mutex);
+
         pool_states[buf_id] = empty; // 更新缓冲区区域状态为empty
         ++ pool_empty_count; // pool_empty_count 加1
         pthread_cond_signal(&condp); // 唤醒可能存在的某个正在等待的生产者
