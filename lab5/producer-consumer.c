@@ -156,7 +156,7 @@ void *produce(void*argv){
         pthread_mutex_unlock(&count_mutex); // 释放计数锁
 
         // 不断尝试获取状态为empty的缓冲区存储单元，并设置状态为producing, 若暂时无，则在condp上wait
-        int buf_id = get_buf(empty, producing, &condp); // 需获取pool_mutex，成功时释放pool_mutex
+        int buf_id = get_buf(empty, producing, &condp); // 需获取缓冲区锁，成功时释放缓冲区锁
 
 
         pthread_mutex_lock(&count_mutex); // 获得计数锁 读取更新产品计数
@@ -219,10 +219,10 @@ void *consume(void*argv){
         pthread_mutex_unlock(&count_mutex); // 释放计数锁
 
         // 不断尝试获取状态为filled的缓冲区存储单元，并设置状态为consuming, 若暂时无，在condc上wait
-        int buf_id = get_buf(filled, consuming, &condc); // 需获取pool_mutex，成功时释放锁
+        int buf_id = get_buf(filled, consuming, &condc); // 需获取缓冲区锁，成功时释放锁
 
 
-        // 打印消费前，消费后的缓冲区
+        // 打印消费前的缓冲区
         pthread_mutex_lock(&pool_mutex); // 获取缓冲区锁
         struct product *ppro = shared_pool[buf_id];
         int product_id = ppro->product_id;
