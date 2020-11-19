@@ -8,9 +8,11 @@ IS                      ((u|U)|(u|U)?(l|L|ll|LL)|(l|L|ll|LL)(u|U))
 
 %{
 #include <stdio.h>
-#include "y.tab.h"
+#include "c99.tab.h"
 
 void count(void);
+void comment(void);
+int check_type(void);
 %}
 
 %%
@@ -141,16 +143,17 @@ void comment(void)
 			return;
 		prev = c;
 	}
-	error("unterminated comment");
+	perror("unterminated comment");
 }
 
 
 int column = 0;
 
+int token_count = 0;
+
 void count(void)
 {
 	int i;
-
 	for (i = 0; yytext[i] != '\0'; i++)
 		if (yytext[i] == '\n')
 			column = 0;
@@ -179,4 +182,227 @@ int check_type(void)
 */
 
 	return IDENTIFIER;
+}
+
+const char *get_token_str(int c);
+
+
+int main1 (int argc, char ** argv){
+	if (argc>=2){
+	  if ((yyin = fopen(argv[1], "r")) == NULL){
+	    printf("Can't open file %s\n", argv[1]);
+	    return 1;
+	  }
+	  if (argc>=3){
+	    yyout=fopen(argv[2], "w");
+	  }
+	}
+	/* yyin和yyout是lex中定义的输入输出文件指针，它们指明了
+	 * lex生成的词法分析器从哪里获得输入和输出到哪里。
+	 * 默认：键盘输入，屏幕输出。 
+	 */    
+	int c = 0;
+	printf("%-18s%-22s%-12s\n", "单词", "词素", "属性");
+	while (c = yylex()){
+		++ token_count;
+		printf("%-16s%-20s%-10s\n", get_token_str(c), yytext, "no");
+		// printf("type:%d\n", c);
+	}
+	return 0;
+}
+
+const char *get_token_str(int c) {
+	switch(c) {
+		case IDENTIFIER:
+        return "IDENTIFIER";
+        break;
+    case CONSTANT:
+        return "CONSTANT";
+        break;
+    case STRING_LITERAL:
+        return "STRING_LITERAL";
+        break;
+    case SIZEOF:
+        return "SIZEOF";
+        break;
+    case PTR_OP:
+        return "PTR_OP";
+        break;
+    case INC_OP:
+        return "INC_OP";
+        break;
+    case DEC_OP:
+        return "DEC_OP";
+        break;
+    case LEFT_OP:
+        return "LEFT_OP";
+        break;
+    case RIGHT_OP:
+        return "RIGHT_OP";
+        break;
+    case LE_OP:
+        return "LE_OP";
+        break;
+    case GE_OP:
+        return "GE_OP";
+        break;
+    case EQ_OP:
+        return "EQ_OP";
+        break;
+    case NE_OP:
+        return "NE_OP";
+        break;
+    case AND_OP:
+        return "AND_OP";
+        break;
+    case OR_OP:
+        return "OR_OP";
+        break;
+    case MUL_ASSIGN:
+        return "MUL_ASSIGN";
+        break;
+    case DIV_ASSIGN:
+        return "DIV_ASSIGN";
+        break;
+    case MOD_ASSIGN:
+        return "MOD_ASSIGN";
+        break;
+    case ADD_ASSIGN:
+        return "ADD_ASSIGN";
+        break;
+    case SUB_ASSIGN:
+        return "SUB_ASSIGN";
+        break;
+    case LEFT_ASSIGN:
+        return "LEFT_ASSIGN";
+        break;
+    case RIGHT_ASSIGN:
+        return "RIGHT_ASSIGN";
+        break;
+    case AND_ASSIGN:
+        return "AND_ASSIGN";
+        break;
+    case XOR_ASSIGN:
+        return "XOR_ASSIGN";
+        break;
+    case OR_ASSIGN:
+        return "OR_ASSIGN";
+        break;
+    case TYPE_NAME:
+        return "TYPE_NAME";
+        break;
+    case TYPEDEF:
+        return "TYPEDEF";
+        break;
+    case EXTERN:
+        return "EXTERN";
+        break;
+    case STATIC:
+        return "STATIC";
+        break;
+    case AUTO:
+        return "AUTO";
+        break;
+    case REGISTER:
+        return "REGISTER";
+        break;
+    case INLINE:
+        return "INLINE";
+        break;
+    case RESTRICT:
+        return "RESTRICT";
+        break;
+    case CHAR:
+        return "CHAR";
+        break;
+    case SHORT:
+        return "SHORT";
+        break;
+    case INT:
+        return "INT";
+        break;
+    case LONG:
+        return "LONG";
+        break;
+    case SIGNED:
+        return "SIGNED";
+        break;
+    case UNSIGNED:
+        return "UNSIGNED";
+        break;
+    case FLOAT:
+        return "FLOAT";
+        break;
+    case DOUBLE:
+        return "DOUBLE";
+        break;
+    case CONST:
+        return "CONST";
+        break;
+    case VOLATILE:
+        return "VOLATILE";
+        break;
+    case VOID:
+        return "VOID";
+        break;
+    case BOOL:
+        return "BOOL";
+        break;
+    case COMPLEX:
+        return "COMPLEX";
+        break;
+    case IMAGINARY:
+        return "IMAGINARY";
+        break;
+    case STRUCT:
+        return "STRUCT";
+        break;
+    case UNION:
+        return "UNION";
+        break;
+    case ENUM:
+        return "ENUM";
+        break;
+    case ELLIPSIS:
+        return "ELLIPSIS";
+        break;
+    case CASE:
+        return "CASE";
+        break;
+    case DEFAULT:
+        return "DEFAULT";
+        break;
+    case IF:
+        return "IF";
+        break;
+    case ELSE:
+        return "ELSE";
+        break;
+    case SWITCH:
+        return "SWITCH";
+        break;
+    case WHILE:
+        return "WHILE";
+        break;
+    case DO:
+        return "DO";
+        break;
+    case FOR:
+        return "FOR";
+        break;
+    case GOTO:
+        return "GOTO";
+        break;
+    case CONTINUE:
+        return "CONTINUE";
+        break;
+    case BREAK:
+        return "BREAK";
+        break;
+    case RETURN:
+        return "RETURN";
+        break;
+    default:
+        return "SINGLE_sign";
+	}
 }

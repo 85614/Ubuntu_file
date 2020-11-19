@@ -1,3 +1,10 @@
+%{
+#include <stdio.h>
+	extern int yylex();
+	void yyerror(char const *s);
+%}
+
+
 %token IDENTIFIER CONSTANT STRING_LITERAL SIZEOF
 %token PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
@@ -11,7 +18,9 @@
 
 %token CASE DEFAULT IF ELSE SWITCH WHILE DO FOR GOTO CONTINUE BREAK RETURN
 
+
 %start translation_unit
+
 %%
 
 primary_expression
@@ -71,7 +80,7 @@ multiplicative_expression
 
 additive_expression
 	: multiplicative_expression
-	| additive_expression '+' multiplicative_expression
+	| additive_expression '+' multiplicative_expression 
 	| additive_expression '-' multiplicative_expression
 	;
 
@@ -459,13 +468,19 @@ declaration_list
 
 
 %%
-#include <stdio.h>
+
 
 extern char yytext[];
 extern int column;
+
 
 void yyerror(char const *s)
 {
 	fflush(stdout);
 	printf("\n%*s\n%*s\n", column, "^", column, s);
+}
+
+int main(){
+	yyparse();
+	return 0;
 }
