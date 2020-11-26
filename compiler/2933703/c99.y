@@ -1,11 +1,19 @@
 %{
 #include <stdio.h>
+#include "base.h"
 	extern int yylex();
 	void yyerror(char const *s);
+	extern FILE *yyin, *yyout;
 %}
 
-
-%token IDENTIFIER CONSTANT STRING_LITERAL SIZEOF
+%union{
+	struct const_t *const_v;
+	struct id_t *id_v;
+	struct stmt_t *stmt_v;
+}
+%token <const_v> CONSTANT 
+%token <id_v> IDENTIFIER 
+%token STRING_LITERAL SIZEOF
 %token PTR_OP INC_OP DEC_OP LEFT_OP RIGHT_OP LE_OP GE_OP EQ_OP NE_OP
 %token AND_OP OR_OP MUL_ASSIGN DIV_ASSIGN MOD_ASSIGN ADD_ASSIGN
 %token SUB_ASSIGN LEFT_ASSIGN RIGHT_ASSIGN AND_ASSIGN
@@ -24,8 +32,8 @@
 %%
 
 primary_expression
-	: IDENTIFIER
-	| CONSTANT
+	: IDENTIFIER {printf("get a id :%ld %s|\n", (long int)(&$1->token), $1->token);}
+	| CONSTANT {printf("get a const :%d\n", $1->val.ival); }
 	| STRING_LITERAL
 	| '(' expression ')'
 	;
@@ -477,10 +485,20 @@ extern int column;
 void yyerror(char const *s)
 {
 	fflush(stdout);
-	printf("\n%*s\n%*s\n", column, "^", column, s);
+	fprintf(yyout, "\n%*s\n%*s\n", column, "^", column, s);
 }
-
-int main(){
+void print_words();
+int main (int argc, char ** argv){
+	if (argc>=2){
+	  if ((yyin = fopen(argv[1], "r")) == NULL){
+	    printf("Can't open file %s\n", argv[1]);
+	    return 1;
+	  }
+	  if (argc>=3){
+	    yyout=fopen(argv[2], "w");
+	  }
+	}
 	yyparse();
+	print_words();
 	return 0;
 }
