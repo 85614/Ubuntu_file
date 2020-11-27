@@ -58,7 +58,7 @@ public:
     void begin_eat() {
         pthread_mutex_lock(&this->mutex);
         this->state = hungry; // 更新状态为hungry
-        printf("%*s%d hungry\n", this->id*12, "", this->id);
+        printf("%*d hungry\n", this->id*12, this->id);
         pthread_mutex_unlock(&this->mutex);
 
         while(1){
@@ -83,7 +83,7 @@ public:
         
         pthread_mutex_lock(&this->mutex);
         this->state = eating; // 更新状态为就餐
-        printf("%*s%d eating\n", this->id*12, "", this->id);
+        printf("%*d eating\n", this->id*12, this->id);
         pthread_mutex_unlock(&this->mutex);
     }
 
@@ -93,7 +93,7 @@ public:
         pthread_cond_signal(&left().cond); // 唤醒可能正在等待的左边的哲学家
         pthread_cond_signal(&right().cond); // 唤醒可能正在等待的右边的哲学家
         this->state = thinking; // 更新状态为思考
-        printf("%*s%d thinking\n", this->id*12, "", this->id);
+        printf("%*d thinking\n", this->id*12, this->id);
         pthread_mutex_unlock(&this->mutex); // 释放锁
     }
 
