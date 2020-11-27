@@ -19,7 +19,7 @@
 
 struct philosopher{
 
-    static pthread_mutex_t mutex; // 锁
+    pthread_mutex_t mutex; // 锁
     const static int PHILOSOPHER_SIZE = 5; // 哲学家数量
 
     static philosopher ps[PHILOSOPHER_SIZE]; // 哲学家们
@@ -34,14 +34,16 @@ struct philosopher{
 private: // 禁止外部实例化哲学家
 
     philosopher(){
-        pthread_cond_init(&cond, NULL);
+        pthread_mutex_init(&this->mutex, NULL);
+        pthread_cond_init(&this->cond, NULL);
         id = this - ps;
         last_t = 0;
         
     }
 
     ~philosopher(){
-        pthread_cond_destroy(&cond);
+        pthread_mutex_destroy(&this->mutex);
+        pthread_cond_destroy(&this->cond);
     }
 public:
 
@@ -54,27 +56,45 @@ public:
     }
 
     void begin_eat() {
-        // 打算就餐，条件不满足则等待
-        pthread_mutex_lock(&mutex); // 获得锁
+        pthread_mutex_lock(&this->mutex);
         this->state = hungry; // 更新状态为hungry
-        print_all(*this); // 打印
-        while (left().state == eating || right().state == eating) { 
-            // 若左边或右边的哲学家正在就餐
-            pthread_cond_wait(&this->cond, &mutex); // 等待
+        printf("%*s%d hungry\n", this->id*12, "", this->id);
+        pthread_mutex_unlock(&this->mutex);
+
+        while(1){
+            pthread_mutex_lock(&left().mutex); 
+            pthread_mutex_lock(&right().mutex); //先左后右
+            if (left().state == eating) {
+                pthread_mutex_unlock(&right().mutex);        
+                pthread_cond_wait(&this->cond, &left().mutex); // 在左边的锁上等待，等左边唤醒
+                pthread_mutex_unlock(&left().mutex);
+            }
+            else if (right().state == eating) {
+                pthread_mutex_unlock(&left().mutex);
+                pthread_cond_wait(&this->cond, &right().mutex); // 在右边的锁上等待，等右边唤醒
+                pthread_mutex_unlock(&right().mutex);        
+            } else {
+                pthread_mutex_unlock(&right().mutex);        
+                pthread_mutex_unlock(&left().mutex);
+                break;
+            }
         }
+        
+        
+        pthread_mutex_lock(&this->mutex);
         this->state = eating; // 更新状态为就餐
-        print_all(*this); // 打印
-        pthread_mutex_unlock(&mutex); // 释放锁
+        printf("%*s%d eating\n", this->id*12, "", this->id);
+        pthread_mutex_unlock(&this->mutex);
     }
 
     void begin_think(){
         // 开始思考
-        pthread_mutex_lock(&mutex); // 获得锁
+        pthread_mutex_lock(&this->mutex); // 获得锁
         pthread_cond_signal(&left().cond); // 唤醒可能正在等待的左边的哲学家
         pthread_cond_signal(&right().cond); // 唤醒可能正在等待的右边的哲学家
         this->state = thinking; // 更新状态为思考
-        print_all(*this); // 打印
-        pthread_mutex_unlock(&mutex); // 释放锁
+        printf("%*s%d thinking\n", this->id*12, "", this->id);
+        pthread_mutex_unlock(&this->mutex); // 释放锁
     }
 
     static void *run(void *pp){
@@ -95,67 +115,8 @@ public:
         return nullptr;
     }
 
-    static void print_all(philosopher &p){
-        // 打印所有的哲学家状态，p是状态刚发生改变的哲学家
-        for (int i = 0; i < PHILOSOPHER_SIZE; ++i) {
-            if (p.id == i) {
-                PRINT_FONT_RED; // 红色字体，给发生改变的哲学家的状态
-            }
-            else {
-                PRINT_FONT_WHI; // 白色字体
-            }
-            switch (ps[i].state)
-            {
-            case hungry:
-                printf("%10s", "hungry");
-                break;
-            case eating:
-                printf("%10s", "eating");
-                break;
-            case thinking:
-                printf("%10s", "thinking");
-                break;
-            default:
-                break;
-            }
-            
-        }
-        time_t tt = time(NULL);
-        tm *t = localtime(&tt);
-        time_t last_t = p.last_t;
-        p.last_t = time(nullptr);
-        PRINT_FONT_WHI;
-        if (last_t == 0)
-            printf(" %10s    ", ""); // 是第一次计时，状态为初始状态，没有上一状态维持的时间
-        else  {
-            switch (p.state)
-            {
-            case hungry:
-                printf(" %10s %02lds", "thinking", p.last_t - last_t);
-                break;
-            case eating:
-                printf(" %10s %02lds", "hungry", p.last_t - last_t);
-                break;
-            case thinking:
-                printf(" %10s %02lds", "eating", p.last_t - last_t);
-                break;
-            default:
-                break;
-            }
-        }
-        // 打印时的时间
-        printf(" %d-%02d-%02d %02d:%02d:%02d\n", 
-            t->tm_year + 1900,
-            t->tm_mon + 1,
-            t->tm_mday,
-            t->tm_hour,
-            t->tm_min,
-            t->tm_sec);        
-    }
 };
 
-
-pthread_mutex_t philosopher::mutex = PTHREAD_MUTEX_INITIALIZER;
 
 philosopher philosopher::ps[philosopher::PHILOSOPHER_SIZE];
 
